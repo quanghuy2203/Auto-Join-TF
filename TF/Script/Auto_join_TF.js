@@ -7,9 +7,9 @@
 !(async () => {
   ids = $persistentStore.read('APP_ID')
   if (ids == null) {
-    $notification.post('未添加 TestFlight APP_ID', '请手动添加或使用 TestFlight 链接自动获取', '')
+    $notification.post('TestFlight APP_ID chưa được thêm', 'Vui lòng thêm thủ công hoặc sử dụng liên kết TestFlight để tải tự động', '')
   } else if (ids == '') {
-    $notification.post('所有 TestFlight 已加入完毕', '请手动禁用该插件', '')
+    $notification.post('Tất cả TestFlight Đã hoàn tất việc tham gia', 'Vui lòng tắt plugin theo cách thủ công', '')
   } else {
     ids = ids.split(',')
     for await (const ID of ids) {
@@ -35,8 +35,8 @@ function autoPost(ID) {
           ids = $persistentStore.read('APP_ID').split(',')
           ids = ids.filter(ids => ids !== ID)
           $persistentStore.write(ids.toString(), 'APP_ID')
-          console.log(ID + ' ' + '不存在该 TestFlight，已自动删除该 APP_ID')
-          $notification.post(ID, '不存在该 TestFlight', '已自动删除该 APP_ID')
+          console.log(ID + ' ' + 'TestFlight không tồn tại và APP_ID đã tự động bị xóa')
+          $notification.post(ID, 'TestFlight không tồn tại', 'APP_ID đã tự động bị xóa')
           resolve()
         } else {
           let jsonData = JSON.parse(data)
@@ -49,8 +49,8 @@ function autoPost(ID) {
           } else {
             $httpClient.post({ url: testurl + ID + '/accept', headers: header }, function (error, resp, body) {
               let jsonBody = JSON.parse(body)
-              $notification.post(jsonBody.data.name, 'TestFlight 加入成功', '')
-              console.log(jsonBody.data.name + ' TestFlight 加入成功')
+              $notification.post(jsonBody.data.name, 'TestFlight đã tham gia thành công', '')
+              console.log(jsonBody.data.name + ' TestFlight đã tham gia thành công')
               ids = $persistentStore.read('APP_ID').split(',')
               ids = ids.filter(ids => ids !== ID)
               $persistentStore.write(ids.toString(), 'APP_ID')
@@ -62,7 +62,7 @@ function autoPost(ID) {
         if (error == 'The request timed out.') {
           resolve()
         } else {
-          $notification.post('自动加入 TestFlight', error, '')
+          $notification.post('Tự động tham gia TestFlight', error, '')
           console.log(ID + ' ' + error)
           resolve()
         }
