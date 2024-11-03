@@ -1,72 +1,96 @@
 /*
-脚本作者：DecoAri
-修复作者: xream
-引用地址：https://raw.githubusercontent.com/DecoAri/JavaScript/main/Surge/Auto_join_TF.js
-感谢某位大佬将改写为Loon版脚本！
+Script Author: DecoAri
+Fix Author: Hely-T
+Reference: https://github.com/Hely-T/TestFlight-All/
+Thanks to a great person for adapting this script into Loon version!
 */
 !(async () => {
-  ids = $persistentStore.read('APP_ID')
+  let ids = $persistentStore.read('APP_ID');
   if (ids == null) {
-    $notification.post('TestFlight APP_ID chưa được thêm', 'Vui lòng thêm thủ công hoặc sử dụng liên kết TestFlight để tải tự động', '')
-  } else if (ids == '') {
-    $notification.post('Tất cả TestFlight Đã hoàn tất việc tham gia', 'Vui lòng tắt plugin theo cách thủ công', '')
+    $notification.post('TestFlight APP_ID chưa được thêm', 'Vui lòng thêm thủ công hoặc sử dụng liên kết TestFlight để tải tự động', '');
+  } else if (ids === '') {
+    $notification.post('Tất cả TestFlight đã được thêm vào', 'Vui lòng tắt plugin theo cách thủ công', '');
   } else {
-    ids = ids.split(',')
+    ids = ids.split(',');
     for await (const ID of ids) {
-      await autoPost(ID)
+      try {
+        await autoPost(ID);
+      } catch (error) {
+        console.error(`Lỗi xảy ra khi xử lý ID ${ID}:`, error);
+      }
     }
   }
-  $done()
-})()
+  $done();
+})();
 
-function autoPost(ID) {
-  let Key = $persistentStore.read('key')
-  let testurl = 'https://testflight.apple.com/v3/accounts/' + Key + '/ru/'
-  let header = {
-    'X-Session-Id': `${$persistentStore.read('session_id')}`,
-    'X-Session-Digest': `${$persistentStore.read('session_digest')}`,
-    'X-Request-Id': `${$persistentStore.read('request_id')}`,
-    'User-Agent': `${$persistentStore.read('tf_ua')}`,
+async function autoPost(ID) {
+  let Key = $persistentStore.read('key');
+  if (!Key) {
+    throw new Error('Key không tồn tại trong persistent store');
   }
-  return new Promise(function (resolve) {
+  
+  let testurl = `https://testflight.apple.com/v3/accounts/${Key}/ru/`;
+  let header = {
+    'X-Session-Id': $persistentStore.read('session_id') || '',
+    'X-Session-Digest': $persistentStore.read('session_digest') || '',
+    'X-Request-Id': $persistentStore.read('request_id') || '',
+    'User-Agent': $persistentStore.read('tf_ua') || ''
+  };
+
+  return new Promise((resolve) => {
     $httpClient.get({ url: testurl + ID, headers: header }, function (error, resp, data) {
-      if (error == null) {
-        if (resp.status == 404) {
-          ids = $persistentStore.read('APP_ID').split(',')
-          ids = ids.filter(ids => ids !== ID)
-          $persistentStore.write(ids.toString(), 'APP_ID')
-          console.log(ID + ' ' + 'TestFlight không tồn tại và APP_ID đã tự động bị xóa')
-          $notification.post(ID, 'TestFlight không tồn tại', 'APP_ID đã tự động bị xóa')
-          resolve()
-        } else {
-          let jsonData = JSON.parse(data)
-          if (jsonData.data == null) {
-            console.log(ID + ' ' + jsonData.messages[0].message)
-            resolve()
-          } else if (jsonData.data.status == 'FULL') {
-            console.log(jsonData.data.app.name + ' ' + ID + ' ' + jsonData.data.message)
-            resolve()
+      if (error) {
+        console.error(`Lỗi khi gửi yêu cầu GET cho ID ${ID}:`, error);
+        resolve();
+        return;
+      }
+
+      if (resp.status === 404) {
+        ids = $persistentStore.read('APP_ID').split(',');
+        ids = ids.filter(currentID => currentID !== ID);
+        $persistentStore.write(ids.toString(), 'APP_ID');
+        console.log(`${ID} TestFlight không tồn tại, APP_ID đã tự động bị xóa`);
+        $notification.post(ID, 'TestFlight không tồn tại', 'APP_ID đã tự động bị xóa');
+        resolve();
+      } else {
+        try {
+          let jsonData = JSON.parse(data);
+          if (!jsonData.data) {
+            console.log(`${ID} ${jsonData.messages?.[0]?.message || 'Không có dữ liệu trả về'}`);
+            resolve();
+          } else if (jsonData.data.status === 'FULL') {
+            console.log(`${jsonData.data.app.name} ${ID} ${jsonData.data.message}`);
+            resolve();
           } else {
             $httpClient.post({ url: testurl + ID + '/accept', headers: header }, function (error, resp, body) {
-              let jsonBody = JSON.parse(body)
-              $notification.post(jsonBody.data.name, 'TestFlight đã tham gia thành công', '')
-              console.log(jsonBody.data.name + ' TestFlight đã tham gia thành công')
-              ids = $persistentStore.read('APP_ID').split(',')
-              ids = ids.filter(ids => ids !== ID)
-              $persistentStore.write(ids.toString(), 'APP_ID')
-              resolve()
-            })
+              if (error) {
+                console.error(`Lỗi khi gửi yêu cầu POST cho ID ${ID}:`, error);
+                resolve();
+                return;
+              }
+              
+              try {
+                let jsonBody = JSON.parse(body);
+                if (jsonBody.data) {
+                  $notification.post(jsonBody.data.name, 'TestFlight đã tham gia thành công.', '');
+                  console.log(`${jsonBody.data.name} TestFlight đã tham gia thành công.`);
+                } else {
+                  console.log(`Dữ liệu POST không hợp lệ cho ID ${ID}`);
+                }
+                ids = $persistentStore.read('APP_ID').split(',');
+                ids = ids.filter(currentID => currentID !== ID);
+                $persistentStore.write(ids.toString(), 'APP_ID');
+              } catch (parseError) {
+                console.error(`Lỗi phân tích JSON từ phản hồi POST cho ID ${ID}:`, parseError);
+              }
+              resolve();
+            });
           }
-        }
-      } else {
-        if (error == 'The request timed out.') {
-          resolve()
-        } else {
-          $notification.post('Tự động tham gia TestFlight', error, '')
-          console.log(ID + ' ' + error)
-          resolve()
+        } catch (parseError) {
+          console.error(`Lỗi phân tích JSON từ phản hồi GET cho ID ${ID}:`, parseError);
+          resolve();
         }
       }
-    })
-  })
+    });
+  });
 }
